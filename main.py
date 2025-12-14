@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
+from PIL import Image
 import numpy as np
 
 # Konfigurasi halaman Streamlit
@@ -12,13 +13,18 @@ st.set_page_config(
 st.title("Proyek Data Mining: Clustering Penjualan Vending Machine")
 st.subheader("Metode Clustering: MiniBatchKMeans (Ensemble-like Method)")
 
+# --- Nama File Aset ---
+PKL_FILE = 'vending_machine_sales_clustered.pkl'
+PCA_IMAGE = 'cluster_pca_visualization.png'
+ELBOW_IMAGE = 'elbow_method.png'
+
+
 # --- Memuat Data dan Plot dari File ---
 
 try:
-    # Muat data yang sudah di-cluster dari file PKL
-    # Menggunakan pd.read_pickle untuk memuat DataFrame dari PKL
-    df_clustered = pd.read_pickle('vending_machine_sales_clustered.pkl')
-    st.success("Data klaster berhasil dimuat dari file PKL!")
+    # 1. Muat data yang sudah di-cluster dari file PKL
+    df_clustered = pd.read_pickle(PKL_FILE)
+    st.success(f"Data klaster berhasil dimuat dari file {PKL_FILE}!")
 
     st.markdown("---")
 
@@ -36,20 +42,26 @@ try:
 
     st.markdown("---")
 
-    # Tampilkan Visualisasi PCA (Asumsi file gambar telah disimpan)
     st.subheader("🖼️ Visualisasi Hasil Clustering")
-    
-    st.image('cluster_pca_visualization.png', caption='Visualisasi Klaster dengan PCA (k=5) ', use_column_width=True)
-    
-    st.image('elbow_method.png', caption='Plot Metode Siku (Elbow Method) untuk menentukan k ', use_column_width=True)
+
+    # 2. Muat dan Tampilkan Visualisasi Klaster PCA
+    try:
+        pca_img = Image.open(PCA_IMAGE)
+        st.image(pca_img, caption='Visualisasi Klaster dengan PCA (k=5)', use_column_width=True)
+    except FileNotFoundError:
+        st.error(f"Gagal memuat gambar: {PCA_IMAGE}. Pastikan file ini ada di direktori yang sama.")
+
+    # 3. Muat dan Tampilkan Visualisasi Elbow Method
+    try:
+        elbow_img = Image.open(ELBOW_IMAGE)
+        st.image(elbow_img, caption='Plot Metode Siku (Elbow Method) untuk menentukan k', use_column_width=True)
+    except FileNotFoundError:
+        st.error(f"Gagal memuat gambar: {ELBOW_IMAGE}. Pastikan file ini ada di direktori yang sama.")
     
 except FileNotFoundError as e:
     st.error(f"""
-        File penting tidak ditemukan! ({e})
-        Pastikan Anda telah mengunggah file-file berikut ke GitHub, di folder yang sama:
-        1. 'vending_machine_sales_clustered.pkl' (Hasil Clustering)
-        2. 'cluster_pca_visualization.png' (Visualisasi Klaster)
-        3. 'elbow_method.png' (Plot Elbow Method)
+        File data utama tidak ditemukan! ({e})
+        Pastikan Anda telah mengunggah file **'{PKL_FILE}'** ke GitHub, di folder yang sama.
     """)
     st.info("Fitur yang digunakan untuk clustering adalah: RPrice, RQty, MPrice, MQty, LineTotal, TransTotal.")
 
