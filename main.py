@@ -1,8 +1,14 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-from PIL import Image
+from sklearn.preprocessing import StandardScaler
+from sklearn.cluster import MiniBatchKMeans
+from sklearn.decomposition import PCA
 import numpy as np
+import warnings
+
+# Mengabaikan peringatan untuk kebersihan output
+warnings.filterwarnings("ignore")
 
 # Konfigurasi halaman Streamlit
 st.set_page_config(
@@ -13,11 +19,26 @@ st.set_page_config(
 st.title("Proyek Data Mining: Clustering Penjualan Vending Machine")
 st.subheader("Metode Clustering: MiniBatchKMeans (Ensemble-like Method)")
 
-# --- Nama File Aset ---
 PKL_FILE = 'vending_machine_sales_clustered.pkl'
-PCA_IMAGE = 'cluster_pca_visualization.png'
-ELBOW_IMAGE = 'elbow_method.png'
+n_clusters = 5 # Jumlah klaster yang dipilih sebelumnya
 
+# --- Fungsi untuk Menerapkan Preprocessing (diperlukan untuk Plotting) ---
+@st.cache_data
+def preprocess_data(df_input):
+    """Melakukan preprocessing dan standardisasi data."""
+    
+    # Pilih fitur numerik yang relevan
+    features = ['RPrice', 'RQty', 'MPrice', 'MQty', 'LineTotal', 'TransTotal']
+    df_cluster = df_input[features].copy()
+
+    # Penanganan Missing Values (Imputasi dengan nilai rata-rata)
+    df_cluster['MPrice'].fillna(df_cluster['MPrice'].mean(), inplace=True)
+
+    # Standardisasi Data
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(df_cluster)
+    
+    return X_scaled, df_cluster
 
 # --- Memuat Data dan Plot dari File ---
 
@@ -25,6 +46,9 @@ try:
     # 1. Muat data yang sudah di-cluster dari file PKL
     df_clustered = pd.read_pickle(PKL_FILE)
     st.success(f"Data klaster berhasil dimuat dari file {PKL_FILE}!")
+
+    # 2. Persiapan Data untuk Plotting
+    X_scaled, _ = preprocess_data(df_clustered)
 
     st.markdown("---")
 
@@ -37,26 +61,64 @@ try:
     with col2:
         st.subheader("📈 Ringkasan Ukuran Klaster")
         cluster_counts = df_clustered['Cluster'].value_counts().sort_index()
-        # Menggunakan bar chart Streamlit yang interaktif
         st.bar_chart(cluster_counts)
 
     st.markdown("---")
 
     st.subheader("🖼️ Visualisasi Hasil Clustering")
 
-    # 2. Muat dan Tampilkan Visualisasi Klaster PCA
-    try:
-        pca_img = Image.open(PCA_IMAGE)
-        st.image(pca_img, caption='Visualisasi Klaster dengan PCA (k=5)', use_column_width=True)
-    except FileNotFoundError:
-        st.error(f"Gagal memuat gambar: {PCA_IMAGE}. Pastikan file ini ada di direktori yang sama.")
+    # --- Plot 1: Elbow Method (Regenerasi Plot) ---
+    
+    @st.cache_resource
+    def generate_elbow_plot(X_scaled):
+        wcss = []
+        k_values = range(2, 11)
+        
+        for k in k_values:
+            kmeans = MiniBatchKMeans(n_clusters=k, random_state=42, n_init='auto')
+            kmeans.fit(X_scaled)
+            wcss.append(kmeans.inertia_)
+            
+        fig, ax = plt.subplots(figsize=(8, 5))
+        ax.plot(k_values, wcss, marker='o', linestyle='--', color='blue')
+        ax.set_title('Elbow Method (MiniBatchKMeans)')
+        ax.set_xlabel('Jumlah Klaster (k)')
+        ax.set_ylabel('Within-Cluster Sum of Squares (WCSS)')
+        ax.set_xticks(k_values)
+        ax.grid(True)
+        
+        return fig
 
-    # 3. Muat dan Tampilkan Visualisasi Elbow Method
-    try:
-        elbow_img = Image.open(ELBOW_IMAGE)
-        st.image(elbow_img, caption='Plot Metode Siku (Elbow Method) untuk menentukan k', use_column_width=True)
-    except FileNotFoundError:
-        st.error(f"Gagal memuat gambar: {ELBOW_IMAGE}. Pastikan file ini ada di direktori yang sama.")
+    st.markdown("##### 1. Plot Metode Siku (Elbow Method)")
+    st.pyplot(generate_elbow_plot(X_scaled))
+
+    # --- Plot 2: PCA Visualization (Regenerasi Plot) ---
+    
+    @st.cache_resource
+    def generate_pca_plot(X_scaled, cluster_labels, n_clusters):
+        pca = PCA(n_components=2, random_state=42)
+        principal_components = pca.fit_transform(X_scaled)
+        df_pca = pd.DataFrame(data=principal_components, columns=['PC1', 'PC2'])
+        
+        # Ambil label klaster dari df_clustered
+        df_pca['Cluster'] = cluster_labels
+
+        fig, ax = plt.subplots(figsize=(10, 8))
+        scatter = ax.scatter(df_pca['PC1'], df_pca['PC2'], 
+                             c=df_pca['Cluster'], 
+                             cmap='Spectral', alpha=0.7)
+        
+        ax.legend(*scatter.legend_elements(), title="Klaster", loc="upper right")
+        ax.set_title(f'Visualisasi Klaster dengan PCA ({n_clusters} Klaster)')
+        ax.set_xlabel(f'Principal Component 1 ({pca.explained_variance_ratio_[0]*100:.2f}%)')
+        ax.set_ylabel(f'Principal Component 2 ({pca.explained_variance_ratio_[1]*100:.2f}%)')
+        ax.grid(True)
+        
+        return fig
+
+    st.markdown("##### 2. Visualisasi Klaster dengan PCA")
+    st.pyplot(generate_pca_plot(X_scaled, df_clustered['Cluster'], n_clusters))
+
     
 except FileNotFoundError as e:
     st.error(f"""
