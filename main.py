@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.decomposition import PCA
+from sklearn.linear_model import LinearRegression # Diperlukan untuk Regresi
 import numpy as np
 import warnings
 
@@ -23,10 +24,10 @@ PKL_FILE = 'vending_machine_sales_clustered.pkl'
 n_clusters = 5 # Jumlah klaster yang dipilih sebelumnya
 features = ['RPrice', 'RQty', 'MPrice', 'MQty', 'LineTotal', 'TransTotal']
 
-# --- Fungsi untuk Menerapkan Preprocessing dan Melatih Model ---
+# --- Fungsi untuk Melatih Model dan mendapatkan tools ---
 @st.cache_resource
 def train_and_get_tools(df_input):
-    """Melakukan preprocessing, standardisasi, dan melatih model K-Means."""
+    """Melakukan preprocessing, standardisasi, dan melatih model K-Means/Scaler."""
     
     # 1. Persiapan Data
     df_cluster = df_input[features].copy()
@@ -54,7 +55,6 @@ try:
     st.success(f"Data klaster berhasil dimuat dari file {PKL_FILE}!")
 
     # 2. Latih kembali model dan dapatkan scaler/model untuk prediksi manual
-    # Note: Kita perlu melatihnya kembali untuk mendapatkan objek scaler dan model
     X_scaled, df_cluster_features, scaler_model, kmeans_model, df_clustered = train_and_get_tools(df_clustered.copy())
 
     st.markdown("---")
@@ -72,55 +72,69 @@ try:
 
     st.markdown("---")
 
-    st.subheader("🖼️ Visualisasi Hasil Clustering")
+    # ==============================================================================
+    # VISUALISASI CLUSTERING & REGRESI
+    # ==============================================================================
+    
+    st.subheader("🖼️ Perbandingan Visualisasi: Clustering vs Regresi")
+    
+    viz_col1, viz_col2 = st.columns(2)
 
-    # --- Plot 1: Elbow Method (Regenerasi Plot) ---
-    @st.cache_resource
-    def generate_elbow_plot(X_scaled):
-        wcss = []
-        k_values = range(2, 11)
+    # --- Kolom 1: Plot Clustering (PCA Visualization) ---
+    with viz_col1:
+        st.markdown("##### 1. Visualisasi Klaster dengan PCA (Clustering)")
         
-        for k in k_values:
-            kmeans = MiniBatchKMeans(n_clusters=k, random_state=42, n_init='auto')
-            kmeans.fit(X_scaled)
-            wcss.append(kmeans.inertia_)
+        @st.cache_resource
+        def generate_pca_plot(X_scaled, cluster_labels, n_clusters):
+            pca = PCA(n_components=2, random_state=42)
+            principal_components = pca.fit_transform(X_scaled)
+            df_pca = pd.DataFrame(data=principal_components, columns=['PC1', 'PC2'])
+            df_pca['Cluster'] = cluster_labels
+
+            fig, ax = plt.subplots(figsize=(10, 8))
+            scatter = ax.scatter(df_pca['PC1'], df_pca['PC2'], 
+                                 c=df_pca['Cluster'], 
+                                 cmap='Spectral', alpha=0.7)
             
-        fig, ax = plt.subplots(figsize=(8, 5))
-        ax.plot(k_values, wcss, marker='o', linestyle='--', color='blue')
-        ax.set_title('Elbow Method (MiniBatchKMeans)')
-        ax.set_xlabel('Jumlah Klaster (k)')
-        ax.set_ylabel('Within-Cluster Sum of Squares (WCSS)')
-        ax.set_xticks(k_values)
-        ax.grid(True)
-        return fig
+            ax.legend(*scatter.legend_elements(), title="Klaster", loc="upper right")
+            ax.set_title(f'Hasil Clustering: Pengelompokan Perilaku ({n_clusters} Klaster)')
+            ax.set_xlabel(f'Principal Component 1 ({pca.explained_variance_ratio_[0]*100:.2f}%)')
+            ax.set_ylabel(f'Principal Component 2 ({pca.explained_variance_ratio_[1]*100:.2f}%)')
+            ax.grid(True)
+            return fig
 
-    st.markdown("##### 1. Plot Metode Siku (Elbow Method)")
-    st.pyplot(generate_elbow_plot(X_scaled)) 
+        st.pyplot(generate_pca_plot(X_scaled, df_clustered['Cluster'], n_clusters))
 
-    # --- Plot 2: PCA Visualization (Regenerasi Plot) ---
-    @st.cache_resource
-    def generate_pca_plot(X_scaled, cluster_labels, n_clusters):
-        pca = PCA(n_components=2, random_state=42)
-        principal_components = pca.fit_transform(X_scaled)
-        df_pca = pd.DataFrame(data=principal_components, columns=['PC1', 'PC2'])
+    # --- Kolom 2: Plot Regresi (Simulasi Prediksi Nilai) ---
+    with viz_col2:
+        st.markdown("##### 2. Simulasi Regresi Linier (Prediksi Nilai)")
         
-        df_pca['Cluster'] = cluster_labels
+        @st.cache_resource
+        def generate_regression_plot(df):
+            # Tentukan X dan Y untuk Regresi Sederhana
+            X_reg = df[['LineTotal']] 
+            Y_reg = df['TransTotal'] 
 
-        fig, ax = plt.subplots(figsize=(10, 8))
-        scatter = ax.scatter(df_pca['PC1'], df_pca['PC2'], 
-                             c=df_pca['Cluster'], 
-                             cmap='Spectral', alpha=0.7)
-        
-        ax.legend(*scatter.legend_elements(), title="Klaster", loc="upper right")
-        ax.set_title(f'Visualisasi Klaster dengan PCA ({n_clusters} Klaster)')
-        ax.set_xlabel(f'Principal Component 1 ({pca.explained_variance_ratio_[0]*100:.2f}%)')
-        ax.set_ylabel(f'Principal Component 2 ({pca.explained_variance_ratio_[1]*100:.2f}%)')
-        ax.grid(True)
-        return fig
+            regressor = LinearRegression()
+            regressor.fit(X_reg, Y_reg)
+            Y_pred = regressor.predict(X_reg)
 
-    st.markdown("##### 2. Visualisasi Klaster dengan PCA")
-    st.pyplot(generate_pca_plot(X_scaled, df_clustered['Cluster'], n_clusters)) 
+            fig, ax = plt.subplots(figsize=(10, 8))
+            ax.scatter(df['LineTotal'], df['TransTotal'], color='gray', label='Data Aktual')
+            ax.plot(df['LineTotal'], Y_pred, color='red', linewidth=3, label='Garis Prediksi (Regresi)')
+            ax.set_title('Regresi: Prediksi TransTotal dari LineTotal')
+            ax.set_xlabel('LineTotal (Fitur)')
+            ax.set_ylabel('TransTotal (Target)')
+            ax.legend()
+            ax.grid(True)
+            return fig
 
+        st.pyplot(generate_regression_plot(df_clustered)) # Gunakan df_clustered sebagai sumber data
+
+    # ==============================================================================
+    # END: VISUALISASI
+    # ==============================================================================
+    
     st.markdown("---")
     
     # ==============================================================================
@@ -152,7 +166,6 @@ try:
         new_data = pd.DataFrame([[r_price, r_qty, m_price, m_qty, line_total, trans_total]], columns=features)
         
         # 2. Skalakan data baru menggunakan Scaler yang sudah dilatih
-        # Penting: Hanya transform, tidak fit lagi!
         new_data_scaled = scaler_model.transform(new_data)
         
         # 3. Prediksi klaster menggunakan model MiniBatchKMeans
@@ -161,14 +174,17 @@ try:
         # 4. Tampilkan Hasil
         st.subheader("✅ Hasil Klasifikasi")
         st.success(f"Transaksi ini paling cocok masuk ke **Klaster {predicted_cluster}**!")
-        st.info(f"""
-        **Interpretasi Klaster:** Klaster {predicted_cluster} mewakili kelompok transaksi dengan rata-rata nilai total transaksi:
-        - **Klaster 2:** Transaksi Sangat Murah (Rata-rata $1.13)
-        - **Klaster 0:** Transaksi Murah Standar (Rata-rata $1.78)
-        - **Klaster 3:** Transaksi Nilai Menengah (Rata-rata $3.10)
-        - **Klaster 1:** Transaksi Nilai Tinggi/Volume Menengah (Rata-rata $4.01)
-        - **Klaster 4:** Transaksi Premium/Nilai Tertinggi (Rata-rata $4.47)
-        """)
+        
+        # Tambahkan kembali interpretasi klaster berdasarkan rata-rata nilai (seperti yang telah kita bahas)
+        cluster_interpretations = {
+            2: "Transaksi Sangat Murah (Rata-rata $1.13) - Volume Tinggi",
+            0: "Transaksi Murah Standar (Rata-rata $1.78)",
+            3: "Transaksi Nilai Menengah (Rata-rata $3.10)",
+            1: "Transaksi Nilai Tinggi/Volume Menengah (Rata-rata $4.01)",
+            4: "Transaksi Premium/Nilai Tertinggi (Rata-rata $4.47) - Profit Kunci"
+        }
+        
+        st.info(f"**Interpretasi:** Klaster {predicted_cluster} mewakili {cluster_interpretations.get(predicted_cluster, 'Klaster tidak dikenal')}.")
     
     # ==============================================================================
     # END: Input Data Manual
