@@ -159,7 +159,7 @@ try:
         line_total = col_input_3.number_input("Total Baris (LineTotal)", min_value=0.01, value=2.50, step=0.01)
         trans_total = col_input_3.number_input("Total Transaksi (TransTotal)", min_value=0.01, value=2.50, step=0.01)
         
-        submitted = st.form_submit_button("Klasifikasikan Transaksi!")
+        submitted = st.form_submit_button("Prediksi Transaksi!")
 
     if submitted:
         # 1. Buat DataFrame dari input pengguna
