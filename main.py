@@ -172,7 +172,7 @@ try:
         predicted_cluster = kmeans_model.predict(new_data_scaled)[0]
         
         # 4. Tampilkan Hasil
-        st.subheader("✅ Hasil Klasifikasi")
+        st.subheader("✅ Hasil Prediksi")
         st.success(f"Transaksi ini paling cocok masuk ke **Klaster {predicted_cluster}**!")
         
         # Tambahkan kembali interpretasi klaster berdasarkan rata-rata nilai (seperti yang telah kita bahas)
